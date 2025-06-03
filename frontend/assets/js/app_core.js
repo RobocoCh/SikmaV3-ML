@@ -45,7 +45,7 @@ const AppCore = {
             UI.hideElement(AuthFlow.appContainer);
             return;
         }
-        
+
         if (window.sikmaApp && window.sikmaApp.initialUserData) {
             UI.updateSharedUserUI(window.sikmaApp.initialUserData);
             // Pemanggilan PageSettings.populateSettingsForm dan PageProfile.loadAndDisplayProfileData
@@ -73,7 +73,7 @@ const AppCore = {
             // meskipun navigasi dibatasi.
             AppCore.activePageId = 'page-profile';
         }
-        
+
         AppCore.isInitialized = true;
         window.sikmaApp.mainAppFullyInitialized = true;
         console.log("AppCore: Main application components initialized.");
@@ -118,7 +118,7 @@ const AppCore = {
             if (icon) { icon.classList.remove('fa-chevron-right'); icon.classList.add('fa-chevron-left'); }
             localStorage.setItem('sidebarCollapsed', 'false');
         }
-        
+
         if (!animate) { // Kembalikan transisi setelah render
             setTimeout(() => elementsToAnimate.forEach(el => el.style.transition = ''), 50);
         }
@@ -204,7 +204,7 @@ const AppCore = {
             clickedElement = UI.getElement(`.navigation ul li a[data-page="page-home"]`);
             pageTitleSuffix = 'Dashboard';
         }
-        
+
         AppCore.activePageId = pageId; // Update active page
         AppCore.pages.forEach(page => UI.toggleClass(page, 'active', page.id === pageId));
 
@@ -213,7 +213,7 @@ const AppCore = {
         if (targetNavLink) {
             targetNavLink.classList.add('active-link');
         }
-        
+
         const baseTitle = window.sikmaApp.appName || 'SIKMA';
         let newTitle = baseTitle;
         if (pageTitleSuffix && pageTitleSuffix.toLowerCase() !== 'utama' && pageTitleSuffix.toLowerCase() !== 'dashboard') {
@@ -256,7 +256,7 @@ const AppCore = {
                 break;
         }
     },
-    
+
     _initHeaderScroll: () => {
         if (AppCore.pageHeader && AppCore.mainContentWrapper) {
             AppCore.mainContentWrapper.removeEventListener('scroll', AppCore._handleHeaderScroll);
@@ -305,36 +305,84 @@ const AppCore = {
 
     resetMainAppUI: () => {
         console.log("AppCore: Resetting main application UI...");
-        UI.resetSharedUserUI();
 
-        // Reset halaman-halaman
-        if (typeof PageHome !== 'undefined' && typeof PageHome.resetPage === 'function') PageHome.resetPage();
-        if (typeof PageProfile !== 'undefined' && typeof PageProfile.resetPage === 'function') PageProfile.resetPage();
-        if (typeof PageSettings !== 'undefined' && typeof PageSettings.resetPage === 'function') PageSettings.resetPage();
-        if (typeof PageCompanyDetail !== 'undefined' && typeof PageCompanyDetail.resetPage === 'function') PageCompanyDetail.resetPage();
+        try {
+            UI.resetSharedUserUI();
+        } catch (error) {
+            console.error("AppCore: Error resetting shared user UI:", error);
+        }
 
-        // Reset form yang mungkin masih ada state (meskipun page reset harusnya sudah menangani)
-        ['#profileSettingsForm', '#changePasswordForm', '#fullProfileForm', '#itemEntryForm'].forEach(formId => {
-            const form = UI.getElement(formId);
-            if (form) UI.resetForm(form);
-        });
-        
-        AppCore._setSidebarState(false, false); // Tidak collapsed, tanpa animasi
-        AppCore._applyTheme('light-theme', false); // Default ke light, jangan set cookie karena logout akan clear
+        try {
+            // Reset halaman-halaman
+            if (typeof PageHome !== 'undefined' && typeof PageHome.resetPage === 'function') PageHome.resetPage();
+            if (typeof PageProfile !== 'undefined' && typeof PageProfile.resetPage === 'function') PageProfile.resetPage();
+            if (typeof PageSettings !== 'undefined' && typeof PageSettings.resetPage === 'function') PageSettings.resetPage();
+            if (typeof PageCompanyDetail !== 'undefined' && typeof PageCompanyDetail.resetPage === 'function') PageCompanyDetail.resetPage();
+        } catch (error) {
+            console.error("AppCore: Error resetting page-specific modules:", error);
+        }
 
-        // Hapus semua pesan error/info yang mungkin masih tampil
-        UI.getAllElements('.auth-message').forEach(msgDiv => UI.hideMessage(msgDiv));
-        if (AppCore.pageHeader) UI.removeClass(AppCore.pageHeader, 'scrolled');
+        try {
+            // Reset form yang mungkin masih ada state
+            ['#profileSettingsForm', '#changePasswordForm', '#fullProfileForm', '#itemEntryForm'].forEach(formId => {
+                const form = UI.getElement(formId);
+                if (form) UI.resetForm(form);
+            });
+        } catch (error) {
+            console.error("AppCore: Error resetting forms:", error);
+        }
 
-        AppCore.restrictNavigation(false);
-        if(AppCore.pageSidebar) UI.removeClass(AppCore.pageSidebar, 'profile-incomplete-restricted');
-        
-        // Hapus hash dari URL
-        history.pushState("", document.title, window.location.pathname + window.location.search);
+        try {
+            AppCore._setSidebarState(false, false); // Tidak collapsed, tanpa animasi
+            // AppCore._applyTheme('light-theme', false); // Theme reset is handled in AuthFlow.handleLogout or by body class directly
+                                                    // to ensure cookie/localStorage are also cleared.
+                                                    // Let's ensure body classes are set correctly here as a fallback.
+            if (document.body.classList.contains('dark-theme')) {
+                document.body.classList.remove('dark-theme');
+            }
+            if (!document.body.classList.contains('light-theme')) {
+                document.body.classList.add('light-theme');
+            }
 
-        AppCore.isInitialized = false; // Tandai sebagai belum terinisialisasi lagi
+        } catch (error) {
+            console.error("AppCore: Error resetting sidebar or theme defaults:", error);
+        }
+
+        try {
+            // Hapus semua pesan error/info yang mungkin masih tampil
+            const messageElements = UI.getAllElements('.auth-message');
+            if (messageElements && messageElements.length > 0) {
+                messageElements.forEach(msgDiv => UI.hideMessage(msgDiv));
+            }
+            if (AppCore.pageHeader) UI.removeClass(AppCore.pageHeader, 'scrolled');
+        } catch (error) {
+            console.error("AppCore: Error clearing messages or header style:", error);
+        }
+
+        try {
+            AppCore.restrictNavigation(false);
+            if(AppCore.pageSidebar) UI.removeClass(AppCore.pageSidebar, 'profile-incomplete-restricted');
+        } catch (error) {
+            console.error("AppCore: Error resetting navigation restrictions:", error);
+        }
+
+        try {
+            // Hapus hash dari URL. Only do this if history.pushState is available.
+            if (history.pushState) {
+                history.pushState("", document.title, window.location.pathname + window.location.search);
+            } else {
+                // Fallback for older browsers, though less likely to be an issue with modern JS
+                window.location.hash = "";
+            }
+        } catch (error) {
+            console.error("AppCore: Error clearing URL hash:", error);
+        }
+
+        // These state flags should always be set
+        AppCore.isInitialized = false;
         window.sikmaApp.mainAppFullyInitialized = false;
-        console.log("AppCore: Main app UI reset complete.");
+
+        console.log("AppCore: Main app UI reset process completed (individual errors may have occurred).");
     },
 
     restrictNavigation: (shouldRestrict, allowedPageId = '') => {
@@ -359,16 +407,16 @@ const AppCore = {
         let strength = 0;
         if (value.length >= 8) strength++; // Minimal 8 karakter
         // Cek kombinasi huruf besar, huruf kecil, angka, simbol
-        if (value.match(/[a-z]/) && value.match(/[A-Z]/)) strength++; 
+        if (value.match(/[a-z]/) && value.match(/[A-Z]/)) strength++;
         if (value.match(/\d/)) strength++;
         if (value.match(/[^a-zA-Z\d\s]/)) strength++; // Simbol (bukan huruf, angka, atau spasi)
 
         const strengthLevels = ['Sangat Lemah', 'Lemah', 'Sedang', 'Kuat', 'Sangat Kuat'];
         const strengthClasses = ['strength-0', 'strength-1', 'strength-2', 'strength-3', 'strength-4'];
-        
+
         // Hapus kelas strength sebelumnya
         strengthIndicatorEl.className = 'password-strength-indicator'; // Reset ke kelas dasar
-        
+
         if (value.length > 0) {
             strengthIndicatorEl.textContent = strengthLevels[strength] || strengthLevels[0];
             strengthIndicatorEl.classList.add(strengthClasses[strength] || strengthClasses[0]);

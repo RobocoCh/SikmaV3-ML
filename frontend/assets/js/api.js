@@ -135,7 +135,7 @@ async function fetchAPI(action, options = {}) {
 const Api = {
   register: (formData) => fetchAPI("register", { body: formData }),
   login: (formData) => fetchAPI("login", { body: formData }),
-  logout: () => fetchAPI("logout", { method: "POST", body: "action=logout" }), // Pastikan method POST
+  logout: () => fetchAPI("logout", { method: "POST" }), // Pastikan method POST
   checkSession: () =>
     fetchAPI("check_session", { method: "POST", body: "action=check_session" }),
 

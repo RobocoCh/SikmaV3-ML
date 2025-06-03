@@ -26,7 +26,7 @@ const AuthFlow = {
     registerTermsCheckbox: null,
     registerMessageDiv: null,
     registerSubmitBtn: null,
-    
+
     // Profile Completion Overlay
     profileCompletionOverlay: null,
     profileCompletionMessageDiv: null,
@@ -91,7 +91,7 @@ const AuthFlow = {
         if (AuthFlow.registerForm && AuthFlow.registerSubmitBtn) {
             AuthFlow.registerForm.addEventListener('submit', AuthFlow.handleRegisterSubmit);
         }
-        
+
         if (AuthFlow.logoutLink) {
             AuthFlow.logoutLink.removeEventListener('click', AuthFlow.handleLogout); // Prevent multiple listeners
             AuthFlow.logoutLink.addEventListener('click', AuthFlow.handleLogout);
@@ -153,10 +153,10 @@ const AuthFlow = {
         if (response.status === 'success' && response.user) {
             window.sikmaApp.isUserLoggedIn = true;
             window.sikmaApp.initialUserData = response.user;
-            
+
             UI.hideElement(AuthFlow.authContainer);
             UI.showElement(AuthFlow.appContainer, 'flex'); // appContainer uses flex
-            
+
             AppCore.initializeMainApp(); // Initialize the main application UI and logic
             AuthFlow.checkInitialProfileCompletion(); // Check and handle profile completion
 
@@ -169,7 +169,7 @@ const AuthFlow = {
     handleRegisterSubmit: async (e) => {
         e.preventDefault();
         if (AuthFlow.registerMessageDiv) UI.hideMessage(AuthFlow.registerMessageDiv);
-        
+
         // Basic client-side validation for terms
         if (AuthFlow.registerTermsCheckbox && !AuthFlow.registerTermsCheckbox.checked) {
             UI.showMessage(AuthFlow.registerMessageDiv, 'Anda harus menyetujui Syarat & Ketentuan untuk mendaftar.', 'error');
@@ -195,32 +195,55 @@ const AuthFlow = {
 
     handleLogout: async (e) => {
         if (e) e.preventDefault();
-        
+
         // Optional: Show a confirmation dialog
         // const confirmLogout = await UI.showConfirmationModal("Konfirmasi Logout", "Apakah Anda yakin ingin keluar dari aplikasi?");
         // if (!confirmLogout) return;
 
         const response = await Api.logout();
-        if (response.status === 'success' || response.action === 'logout_required') { // Handle if session already expired on server
+
+        if (response.status === 'success' || response.action === 'logout_required') {
+            // Critical state updates first
             window.sikmaApp.isUserLoggedIn = false;
             window.sikmaApp.initialUserData = null;
-            
-            AppCore.resetMainAppUI();
-            UI.hideElement(AuthFlow.appContainer);
-            UI.showElement(AuthFlow.authContainer, 'flex');
-            AuthFlow.showLoginForm();
-            
-            // Clear theme from localStorage and cookie (AppCore might also do this)
-            localStorage.removeItem('theme');
-            localStorage.removeItem('sidebarCollapsed');
-            document.cookie = "theme=;path=/;max-age=0;SameSite=Lax";
-            document.body.classList.remove('dark-theme'); // Ensure theme is visually reset
+            console.log("AuthFlow: User session state cleared on client.");
 
-            console.log("AuthFlow: User logged out successfully.");
+            try {
+                AppCore.resetMainAppUI();
+
+                // Ensure auth container is shown and app container is hidden
+                if (AuthFlow.appContainer) UI.hideElement(AuthFlow.appContainer);
+                if (AuthFlow.authContainer) UI.showElement(AuthFlow.authContainer, 'flex');
+
+                AuthFlow.showLoginForm(); // This also sets the document title
+
+                // Clear theme and sidebar state from localStorage and cookies
+                localStorage.removeItem('theme');
+                localStorage.removeItem('sidebarCollapsed');
+                // Ensure cookie removal is effective by specifying path and domain if necessary,
+                // but path=/ should generally work for cookies set by AppCore._applyTheme.
+                document.cookie = "theme=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT;SameSite=Lax";
+                // AppCore.resetMainAppUI() should ideally handle body class for theme.
+                // If not, ensure it's reset:
+                document.body.classList.remove('dark-theme');
+                document.body.classList.add('light-theme'); // Explicitly set to light
+
+                console.log("AuthFlow: User logged out successfully and UI reset.");
+
+            } catch (uiError) {
+                console.error("AuthFlow: Error during UI reset after logout:", uiError);
+                // Even if UI reset fails, try to ensure the user sees the login form
+                // and the application state reflects logout.
+                if (AuthFlow.appContainer) UI.hideElement(AuthFlow.appContainer);
+                if (AuthFlow.authContainer) UI.showElement(AuthFlow.authContainer, 'flex');
+                AuthFlow.showLoginForm(); // Attempt to show login form again
+                alert("Logout successful, but there was an issue updating the display. Please refresh if needed.");
+            }
         } else {
-            // Show message in header or a global notification area
-            const headerMessageArea = UI.getElement('#pageHeaderMessage') || UI.getElement('#pageHeader'); // Assuming a message area in header
-            UI.showMessage(headerMessageArea || 'body', response.message || 'Logout gagal.', 'error', 3000);
+            // Show message if logout API call itself failed
+            const headerMessageArea = UI.getElement('#pageHeaderMessage') || UI.getElement('#pageHeader') || AuthFlow.loginMessageDiv || 'body';
+            UI.showMessage(headerMessageArea, response.message || 'Logout gagal. Silakan coba lagi.', 'error', 5000);
+            console.error("AuthFlow: Logout API call failed.", response);
         }
     },
 
@@ -263,7 +286,7 @@ const AuthFlow = {
         if (!window.sikmaApp.isUserLoggedIn || !window.sikmaApp.initialUserData) {
             return; // Not logged in
         }
-        
+
         const needsCompletion = !window.sikmaApp.initialUserData.is_profile_complete;
         window.sikmaApp.needsProfileCompletion = needsCompletion;
 
@@ -276,10 +299,10 @@ const AuthFlow = {
             } else {
                 UI.showMessage(UI.getElement('#pageHeader') || 'body', 'Profil Anda belum lengkap. Harap lengkapi data diri Anda.', 'warning', 0);
             }
-            
+
             AppCore.restrictNavigation(true, 'page-profile'); // Restrict nav, allow 'page-profile'
             // Navigasi ke halaman profil akan dihandle oleh tombol di overlay atau otomatis jika diinginkan
-            // AppCore.navigateToPage('page-profile', null, 'Lengkapi Profil'); 
+            // AppCore.navigateToPage('page-profile', null, 'Lengkapi Profil');
         } else {
             if (AuthFlow.profileCompletionOverlay && AuthFlow.profileCompletionOverlay.style.display !== 'none') {
                 UI.hideElement(AuthFlow.profileCompletionOverlay);
